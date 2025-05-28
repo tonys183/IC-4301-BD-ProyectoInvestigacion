@@ -22,7 +22,8 @@ public class LibrarySystemApp {
     public void initialize() {
         db = Db4oEmbedded.openFile(Db4oEmbedded.newConfiguration(), DB_FILE);
 
-        frame = new JFrame("Sistema de Gestión DB4o");
+        // ------- Swing -------
+        frame = new JFrame("Sistema de Biblioteca DB4o");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setSize(1000, 700);
         frame.setLayout(new BorderLayout());
@@ -131,8 +132,7 @@ public class LibrarySystemApp {
             try {
                 if (entityClass.equals(User.class)) {
                     deleteUserById(id);
-                }
-                else if (entityClass.equals(Book.class)) {
+                } else if (entityClass.equals(Book.class)) {
                     deleteBookByIsbn(id);
                 }
             } catch (Exception e) {
@@ -153,12 +153,12 @@ public class LibrarySystemApp {
 
         if (!users.isEmpty()) {
             int confirm = JOptionPane.showConfirmDialog(frame,
-                    "¿Está seguro de eliminar este usuario?\n" + users.get(0),
+                    "¿Está seguro de eliminar este usuario?\n" + users.getFirst(),
                     "Confirmar Eliminación",
                     JOptionPane.YES_NO_OPTION);
 
             if (confirm == JOptionPane.YES_OPTION) {
-                db.delete(users.get(0));
+                db.delete(users.getFirst());
                 outputArea.append("Usuario eliminado: " + id + "\n");
             }
         } else {
@@ -178,12 +178,12 @@ public class LibrarySystemApp {
 
         if (!books.isEmpty()) {
             int confirm = JOptionPane.showConfirmDialog(frame,
-                    "¿Está seguro de eliminar este libro?\n" + books.get(0),
+                    "¿Está seguro de eliminar este libro?\n" + books.getFirst(),
                     "Confirmar Eliminación",
                     JOptionPane.YES_NO_OPTION);
 
             if (confirm == JOptionPane.YES_OPTION) {
-                db.delete(books.get(0));
+                db.delete(books.getFirst());
                 outputArea.append("Libro eliminado: " + isbn + "\n");
             }
         } else {
@@ -213,9 +213,9 @@ public class LibrarySystemApp {
                 JOptionPane.showMessageDialog(frame, "Libro no encontrado", "Error", JOptionPane.ERROR_MESSAGE);
                 return;
             }
-            book = books.get(0);
+            book = books.getFirst();
         } else {
-            book = new Book("", "", "", "", 0 , true, null);
+            book = new Book("", "", "", "", 0, true, null);
         }
 
         JPanel panel = new JPanel(new GridLayout(0, 2, 5, 5));
@@ -280,7 +280,7 @@ public class LibrarySystemApp {
             });
 
             if (!books.isEmpty()) {
-                Book book = books.get(0);
+                Book book = books.getFirst();
                 boolean newStatus = !book.isAvailable();
                 book.setAvailable(newStatus);
                 db.store(book);
@@ -314,7 +314,7 @@ public class LibrarySystemApp {
                 JOptionPane.showMessageDialog(frame, "Usuario no encontrado", "Error", JOptionPane.ERROR_MESSAGE);
                 return;
             }
-            user = users.get(0);
+            user = users.getFirst();
         } else {
             user = new User("", "");
         }
@@ -351,9 +351,10 @@ public class LibrarySystemApp {
         }
     }
 
-    // Métodos específicos para Préstamos
+
+
+    // ------- Métodos CRUD para Préstamos -------
     private void createNewLending() {
-        // Paso 1: Seleccionar usuario
         List<User> users = db.query(User.class);
         User selectedUser = (User) JOptionPane.showInputDialog(frame,
                 "Seleccione el usuario:",
@@ -365,7 +366,6 @@ public class LibrarySystemApp {
 
         if (selectedUser == null) return;
 
-        // Paso 2: Seleccionar libro disponible
         List<Book> availableBooks = db.query(new Predicate<Book>() {
             @Override
             public boolean match(Book book) {
@@ -387,7 +387,6 @@ public class LibrarySystemApp {
             lending.setBook(selectedBook);
             lending.setLendingDate(new Date());
 
-            // Marcar libro como no disponible
             selectedBook.setAvailable(false);
             db.store(selectedBook);
 
@@ -397,7 +396,6 @@ public class LibrarySystemApp {
     }
 
     private void registerDevolution() {
-        // Buscar préstamos activos (sin fecha de devolución)
         List<Lending> activeLendings = db.query(new Predicate<Lending>() {
             @Override
             public boolean match(Lending lending) {
@@ -422,10 +420,8 @@ public class LibrarySystemApp {
                 null);
 
         if (selectedLending != null) {
-            // Marcar devolución
             selectedLending.setDevolutionDate(new Date());
 
-            // Marcar libro como disponible
             Book book = selectedLending.getBook();
             book.setAvailable(true);
             db.store(book);
@@ -435,7 +431,6 @@ public class LibrarySystemApp {
         }
     }
 
-    // Métodos CRUD completos para Préstamos
     private void updateLending() {
         List<Lending> allLendings = db.query(Lending.class);
 
@@ -447,7 +442,6 @@ public class LibrarySystemApp {
             return;
         }
 
-        // Seleccionar préstamo a actualizar
         Lending selectedLending = (Lending) JOptionPane.showInputDialog(frame,
                 "Seleccione el préstamo a actualizar:",
                 "Actualizar Préstamo",
@@ -459,11 +453,9 @@ public class LibrarySystemApp {
         if (selectedLending != null) {
             JPanel panel = new JPanel(new GridLayout(0, 2, 5, 5));
 
-            // Mostrar información actual
             JLabel currentInfo = new JLabel("<html><b>Préstamo seleccionado:</b><br>" +
                     selectedLending.toString().replace("\n", "<br>") + "</html>");
 
-            // Campos editables
             List<User> allUsers = db.query(User.class);
             JComboBox<User> userCombo = new JComboBox<>(allUsers.toArray(new User[0]));
             userCombo.setSelectedItem(selectedLending.getUser());
@@ -479,7 +471,7 @@ public class LibrarySystemApp {
                             new SimpleDateFormat("yyyy-MM-dd").format(selectedLending.getDevolutionDate()) : "");
 
             panel.add(currentInfo);
-            panel.add(new JLabel()); // Espacio vacío
+            panel.add(new JLabel());
             panel.add(new JLabel("Usuario:"));
             panel.add(userCombo);
             panel.add(new JLabel("Libro:"));
@@ -496,22 +488,17 @@ public class LibrarySystemApp {
 
             if (result == JOptionPane.OK_OPTION) {
                 try {
-                    // Actualizar datos
                     User newUser = (User) userCombo.getSelectedItem();
                     Book newBook = (Book) bookCombo.getSelectedItem();
 
-                    // Verificar cambios que afectan disponibilidad
                     if (!selectedLending.getBook().equals(newBook)) {
-                        // Liberar el libro anterior
                         selectedLending.getBook().setAvailable(true);
                         db.store(selectedLending.getBook());
 
-                        // Reservar el nuevo libro
                         newBook.setAvailable(false);
                         db.store(newBook);
                     }
 
-                    // Aplicar cambios al préstamo
                     selectedLending.setUser(newUser);
                     selectedLending.setBook(newBook);
                     selectedLending.setLendingDate(new SimpleDateFormat("yyyy-MM-dd").parse(lendingDateField.getText()));
@@ -560,7 +547,6 @@ public class LibrarySystemApp {
                     JOptionPane.YES_NO_OPTION);
 
             if (confirm == JOptionPane.YES_OPTION) {
-                // Si el préstamo está activo, liberar el libro
                 if (selectedLending.getDevolutionDate() == null) {
                     Book book = selectedLending.getBook();
                     book.setAvailable(true);
@@ -593,7 +579,9 @@ public class LibrarySystemApp {
         }
     }
 
-    // Métodos CRUD para Categorías
+
+
+    // ------- Métodos CRUD para Categorías -------
     private void createCategory() {
         JTextField nameField = new JTextField();
 
@@ -609,7 +597,6 @@ public class LibrarySystemApp {
         if (result == JOptionPane.OK_OPTION && !nameField.getText().trim().isEmpty()) {
             Category newCategory = new Category(nameField.getText().trim());
 
-            // Verificar si ya existe
             if (!db.query(new Predicate<Category>() {
                 @Override
                 public boolean match(Category cat) {
@@ -648,7 +635,6 @@ public class LibrarySystemApp {
                 null);
 
         if (selectedCategory != null) {
-            // No permitir modificar categorías predefinidas
             if (isDefaultCategory(selectedCategory)) {
                 JOptionPane.showMessageDialog(frame,
                         "No se pueden modificar las categorías predefinidas",
@@ -671,7 +657,6 @@ public class LibrarySystemApp {
             if (result == JOptionPane.OK_OPTION && !nameField.getText().trim().isEmpty()) {
                 String newName = nameField.getText().trim();
 
-                // Verificar si el nuevo nombre ya existe
                 if (!db.query(new Predicate<Category>() {
                     @Override
                     public boolean match(Category cat) {
@@ -691,6 +676,15 @@ public class LibrarySystemApp {
                 outputArea.append("Categoría actualizada: " + selectedCategory + "\n");
             }
         }
+    }
+
+    private boolean isDefaultCategory(Category category) {
+        for (Category defaultCat : Category.values()) {
+            if (defaultCat.equals(category)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void deleteCategory() {
@@ -713,7 +707,6 @@ public class LibrarySystemApp {
                 null);
 
         if (selectedCategory != null) {
-            // No permitir eliminar categorías predefinidas
             if (isDefaultCategory(selectedCategory)) {
                 JOptionPane.showMessageDialog(frame,
                         "No se pueden eliminar las categorías predefinidas",
@@ -722,7 +715,6 @@ public class LibrarySystemApp {
                 return;
             }
 
-            // Verificar si hay libros asociados
             long bookCount = db.query(new Predicate<Book>() {
                 @Override
                 public boolean match(Book book) {
@@ -787,15 +779,6 @@ public class LibrarySystemApp {
                 books.forEach(book -> outputArea.append(book.toString() + "\n"));
             }
         }
-    }
-
-    private boolean isDefaultCategory(Category category) {
-        for (Category defaultCat : Category.values()) {
-            if (defaultCat.equals(category)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private void exitApplication() {

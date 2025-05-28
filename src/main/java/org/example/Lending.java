@@ -22,9 +22,8 @@ public class Lending {
 
     @Override
     public String toString() {
-        return "📘 " + book.getTitle() +
-                " Lend to " + user.getWholeName() +
-                " the " + lendingDate +
-                (devolutionDate != null ? " | Returned the " + devolutionDate : " | Not returned yet");
+        return "Libro: " + book.getTitle() + ", prestado a " + user.getWholeName() +
+                " el " + lendingDate +
+                (devolutionDate != null ? " | Devuelto el " + devolutionDate : " | No devuelto aún");
     }
 }
