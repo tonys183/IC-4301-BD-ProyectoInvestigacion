@@ -2,6 +2,7 @@ package org.example;
 
 import com.db4o.*;
 import com.db4o.query.Predicate;
+import com.formdev.flatlaf.intellijthemes.*;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionListener;
@@ -16,6 +17,8 @@ public class LibrarySystemApp {
     private JTextArea outputArea;
 
     public static void main(String[] args) {
+        try { UIManager.setLookAndFeel(new FlatMonokaiProIJTheme());
+        } catch (Exception e) { e.printStackTrace(); }
         SwingUtilities.invokeLater(() -> new LibrarySystemApp().initialize());
     }
 
@@ -31,13 +34,14 @@ public class LibrarySystemApp {
         JTabbedPane tabbedPane = new JTabbedPane();
 
         JPanel bookPanel = createEntityPanel("Libros",
-                new String[]{"Agregar", "Listar", "Actualizar", "Eliminar", "Disponibilidad"},
+                new String[]{"Agregar", "Listar", "Actualizar", "Eliminar", "Disponibilidad", "Buscar"},
                 new ActionListener[]{
                         e -> showBookDialog("Agregar"),
                         e -> listEntities(Book.class),
                         e -> showBookDialog("Actualizar"),
                         e -> deleteEntity(Book.class, "ISBN"),
-                        e -> toggleBookAvailability()
+                        e -> toggleBookAvailability(),
+                        e -> showBookSearch()
                 });
 
         JPanel userPanel = createEntityPanel("Usuarios",
@@ -81,9 +85,11 @@ public class LibrarySystemApp {
         outputArea.setEditable(false);
         JScrollPane scrollPane = new JScrollPane(outputArea);
 
-        frame.add(tabbedPane, BorderLayout.CENTER);
-        frame.add(scrollPane, BorderLayout.SOUTH);
+        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, tabbedPane, scrollPane);
+        splitPane.setResizeWeight(0.75);
+        splitPane.setDividerSize(8);
 
+        frame.getContentPane().add(splitPane, BorderLayout.CENTER);
         frame.setVisible(true);
     }
 
@@ -109,7 +115,6 @@ public class LibrarySystemApp {
             button.addActionListener(actions[i]);
             panel.add(button);
         }
-
         return panel;
     }
 
@@ -117,8 +122,10 @@ public class LibrarySystemApp {
         outputArea.setText("");
         List<T> entities = db.query(entityClass);
         outputArea.append("--- Listado de " + entityClass.getSimpleName() + "s ---\n");
+        int i = 0;
         for (T entity : entities) {
-            outputArea.append(entity.toString() + "\n");
+            outputArea.append(entityClass.getSimpleName() + ": " + ++i + "\n");
+            outputArea.append(entity.toString() + "\n\n");
         }
         outputArea.append("Total: " + entities.size() + "\n");
     }
@@ -130,11 +137,8 @@ public class LibrarySystemApp {
 
         if (id != null && !id.isEmpty()) {
             try {
-                if (entityClass.equals(User.class)) {
-                    deleteUserById(id);
-                } else if (entityClass.equals(Book.class)) {
-                    deleteBookByIsbn(id);
-                }
+                if (entityClass.equals(User.class)) { deleteUserById(id); }
+                else if (entityClass.equals(Book.class)) { deleteBookByIsbn(id); }
             } catch (Exception e) {
                 JOptionPane.showMessageDialog(frame,
                         "Error al eliminar: " + e.getMessage(),
@@ -146,9 +150,7 @@ public class LibrarySystemApp {
     private void deleteUserById(String id) {
         List<User> users = db.query(new Predicate<User>() {
             @Override
-            public boolean match(User user) {
-                return id.equals(user.getId());
-            }
+            public boolean match(User user) { return id.equals(user.getId()); }
         });
 
         if (!users.isEmpty()) {
@@ -204,9 +206,7 @@ public class LibrarySystemApp {
 
             List<Book> books = db.query(new Predicate<Book>() {
                 @Override
-                public boolean match(Book b) {
-                    return b.getISBN().equals(isbn);
-                }
+                public boolean match(Book b) { return b.getISBN().equals(isbn); }
             });
 
             if (books.isEmpty()) {
@@ -293,6 +293,48 @@ public class LibrarySystemApp {
             }
         }
     }
+
+    private void showBookSearch() {
+        JPanel panel = new JPanel(new GridLayout(0, 2, 5, 5));
+
+        String[] opciones = {"Título", "Autor"};
+        JComboBox<String> criterioCombo = new JComboBox<>(opciones);
+        JTextField searchField = new JTextField();
+
+        panel.add(new JLabel("Buscar por:"));
+        panel.add(criterioCombo);
+        panel.add(new JLabel("Texto a buscar:"));
+        panel.add(searchField);
+
+        int result = JOptionPane.showConfirmDialog(frame, panel,
+                "Buscar Libro", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+
+        if (result == JOptionPane.OK_OPTION) {
+            String criterio = (String) criterioCombo.getSelectedItem();
+            String texto = searchField.getText().toLowerCase();
+
+            List<Book> books = db.query(new Predicate<Book>() {
+                @Override
+                public boolean match(Book book) {
+                    if (criterio.equals("Título")) {
+                        return book.getTitle().toLowerCase().contains(texto);
+                    } else {
+                        return book.getAuthor().toLowerCase().contains(texto);
+                    }
+                }
+            });
+
+            outputArea.setText("");
+            outputArea.append("=== RESULTADOS DE BÚSQUEDA POR " + criterio.toUpperCase() + " ===\n");
+            if (books.isEmpty()) {
+                outputArea.append("No se encontraron libros que coincidan\n");
+            } else {
+                books.forEach(book -> outputArea.append(book.toString() + "\n"));
+            }
+            outputArea.append("Total: " + books.size() + "\n");
+        }
+    }
+
 
     private void showUserDialog(String action) {
         String id = action.equals("Actualizar") ?
@@ -583,11 +625,16 @@ public class LibrarySystemApp {
 
     // ------- Métodos CRUD para Categorías -------
     private void createCategory() {
-        JTextField nameField = new JTextField();
+        JPanel panel = new JPanel(new GridLayout(0, 1, 5, 5));
 
-        JPanel panel = new JPanel(new GridLayout(0, 1));
+        JTextField nameField = new JTextField();
+        JTextArea descriptionArea = new JTextArea(3, 20);
+        JScrollPane descriptionScroll = new JScrollPane(descriptionArea);
+
         panel.add(new JLabel("Nombre de la categoría:"));
         panel.add(nameField);
+        panel.add(new JLabel("Descripción:"));
+        panel.add(descriptionScroll);
 
         int result = JOptionPane.showConfirmDialog(frame, panel,
                 "Crear Nueva Categoría",
@@ -595,7 +642,7 @@ public class LibrarySystemApp {
                 JOptionPane.PLAIN_MESSAGE);
 
         if (result == JOptionPane.OK_OPTION && !nameField.getText().trim().isEmpty()) {
-            Category newCategory = new Category(nameField.getText().trim());
+            Category newCategory = new Category(nameField.getText().trim(), descriptionArea.getText().trim());
 
             if (!db.query(new Predicate<Category>() {
                 @Override
@@ -611,7 +658,8 @@ public class LibrarySystemApp {
             }
 
             db.store(newCategory);
-            outputArea.append("Categoría creada: " + newCategory + "\n");
+            outputArea.append("Categoría creada: " + newCategory.getName() +
+                    (newCategory.getDescription().isEmpty() ? "" : "\nDescripción: " + newCategory.getDescription()) + "\n");
         }
     }
 
@@ -635,19 +683,16 @@ public class LibrarySystemApp {
                 null);
 
         if (selectedCategory != null) {
-            if (isDefaultCategory(selectedCategory)) {
-                JOptionPane.showMessageDialog(frame,
-                        "No se pueden modificar las categorías predefinidas",
-                        "Error",
-                        JOptionPane.ERROR_MESSAGE);
-                return;
-            }
+            JPanel panel = new JPanel(new GridLayout(0, 1, 5, 5));
 
             JTextField nameField = new JTextField(selectedCategory.getName());
+            JTextArea descriptionArea = new JTextArea(selectedCategory.getDescription(), 3, 20);
+            JScrollPane descriptionScroll = new JScrollPane(descriptionArea);
 
-            JPanel panel = new JPanel(new GridLayout(0, 1));
-            panel.add(new JLabel("Nuevo nombre:"));
+            panel.add(new JLabel("Nombre:"));
             panel.add(nameField);
+            panel.add(new JLabel("Descripción:"));
+            panel.add(descriptionScroll);
 
             int result = JOptionPane.showConfirmDialog(frame, panel,
                     "Actualizar Categoría",
@@ -656,6 +701,7 @@ public class LibrarySystemApp {
 
             if (result == JOptionPane.OK_OPTION && !nameField.getText().trim().isEmpty()) {
                 String newName = nameField.getText().trim();
+                String newDescription = descriptionArea.getText().trim();
 
                 if (!db.query(new Predicate<Category>() {
                     @Override
@@ -672,19 +718,12 @@ public class LibrarySystemApp {
                 }
 
                 selectedCategory.setName(newName);
+                selectedCategory.setDescription(newDescription);
                 db.store(selectedCategory);
-                outputArea.append("Categoría actualizada: " + selectedCategory + "\n");
+                outputArea.append("Categoría actualizada: " + selectedCategory.getName() +
+                        (selectedCategory.getDescription().isEmpty() ? "" : "\nNueva descripción: " + selectedCategory.getDescription()) + "\n");
             }
         }
-    }
-
-    private boolean isDefaultCategory(Category category) {
-        for (Category defaultCat : Category.values()) {
-            if (defaultCat.equals(category)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private void deleteCategory() {
@@ -707,14 +746,6 @@ public class LibrarySystemApp {
                 null);
 
         if (selectedCategory != null) {
-            if (isDefaultCategory(selectedCategory)) {
-                JOptionPane.showMessageDialog(frame,
-                        "No se pueden eliminar las categorías predefinidas",
-                        "Error",
-                        JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-
             long bookCount = db.query(new Predicate<Book>() {
                 @Override
                 public boolean match(Book book) {

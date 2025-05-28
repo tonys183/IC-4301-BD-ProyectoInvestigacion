@@ -46,6 +46,6 @@ public class User {
 
     @Override
     public String toString() {
-        return "[" + id + "] " + wholeName + " - " + email;
+        return "ID: [" + id + "] - Nombre: " + wholeName + " - Correo: " + email;
     }
 }

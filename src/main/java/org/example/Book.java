@@ -37,6 +37,6 @@ public class Book {
 
     @Override
     public String toString() {
-        return "[" + ISBN + "] " + title + " - " + author + (available ? " (Disponible)" : " (Prestado)");
+        return "ISBN: [" + ISBN + "] - Título: " + title + " - Autor: " + author + (available ? " (Disponible)" : " (Prestado)");
     }
 }
