@@ -78,8 +78,6 @@ public class LibrarySystemApp {
         tabbedPane.addTab("Usuarios", userPanel);
         tabbedPane.addTab("Préstamos", lendingPanel);
 
-        initializeDefaultCategories();
-
         outputArea = new JTextArea();
         outputArea.setEditable(false);
         JScrollPane scrollPane = new JScrollPane(outputArea);
@@ -90,19 +88,6 @@ public class LibrarySystemApp {
 
         frame.getContentPane().add(splitPane, BorderLayout.CENTER);
         frame.setVisible(true);
-    }
-
-    private void initializeDefaultCategories() {
-        for (Category category : Category.values()) {
-            if (db.query(new Predicate<Category>() {
-                @Override
-                public boolean match(Category cat) {
-                    return cat.equals(category);
-                }
-            }).isEmpty()) {
-                db.store(category);
-            }
-        }
     }
 
     private JPanel createEntityPanel(String title, String[] buttonLabels, ActionListener[] actions) {
@@ -726,6 +711,7 @@ public class LibrarySystemApp {
             }
 
             db.store(newCategory);
+            outputArea.setText("");
             outputArea.append("Categoría creada: " + newCategory.toString());
         }
     }
@@ -773,8 +759,7 @@ public class LibrarySystemApp {
                 if (!db.query(new Predicate<Category>() {
                     @Override
                     public boolean match(Category cat) {
-                        return cat.getName().equalsIgnoreCase(newName) &&
-                                !cat.equals(selectedCategory);
+                        return cat.getName().equalsIgnoreCase(newName) && !cat.equals(selectedCategory);
                     }
                 }).isEmpty()) {
                     JOptionPane.showMessageDialog(frame,
@@ -881,7 +866,8 @@ public class LibrarySystemApp {
     }
 
     private JComboBox<Category> getCategoryJComboBox(Book book) {
-        JComboBox<Category> categoryCombo = new JComboBox<>(Category.values());
+        List<Category> categories = db.query(Category.class);
+        JComboBox<Category> categoryCombo = new JComboBox<>(categories.toArray(new Category[0]));
         categoryCombo.setRenderer(new DefaultListCellRenderer() {
             @Override
             public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {

@@ -7,13 +7,6 @@ public class Category {
     private String name;
     private String description;
 
-    public static final Category FICTION = new Category("Ficción", "Obras literarias imaginarias como novelas, cuentos o relatos.");
-    public static final Category SCIENCE = new Category("Ciencia", "Libros sobre física, biología, química y otras disciplinas científicas.");
-    public static final Category HISTORY = new Category("Historia", "Material relacionado con eventos históricos, biografías o civilizaciones.");
-    public static final Category TECHNOLOGY = new Category("Tecnología", "Temas sobre informática, electrónica, ingeniería y avances técnicos.");
-    public static final Category ART = new Category("Arte", "Obras o estudios sobre pintura, música, cine, escultura y otras expresiones artísticas.");
-    public static final Category OTHER = new Category("Otro", "Categoría general para libros que no encajan en las anteriores.");
-
     public Category() { }
     public Category(String name, String description) {
         this.name = name;
@@ -40,9 +33,5 @@ public class Category {
     @Override
     public int hashCode() {
         return name.toLowerCase().hashCode();
-    }
-
-    public static Category[] values() {
-        return new Category[]{FICTION, SCIENCE, HISTORY, TECHNOLOGY, ART, OTHER};
     }
 }
