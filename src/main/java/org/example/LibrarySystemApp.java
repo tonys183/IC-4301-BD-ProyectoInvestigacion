@@ -54,14 +54,13 @@ public class LibrarySystemApp {
                 });
 
         JPanel lendingPanel = createEntityPanel("Préstamos",
-                new String[]{"Nuevo", "Listar", "Actualizar", "Devolver", "Eliminar", "Historial"},
+                new String[]{"Nuevo", "Historial", "Actualizar", "Devolver", "Eliminar"},
                 new ActionListener[]{
                         e -> createNewLending(),
-                        e -> listEntities(Lending.class),
+                        e -> showLendingHistory(),
                         e -> updateLending(),
                         e -> registerDevolution(),
                         e -> deleteLending(),
-                        e -> showLendingHistory()
                 });
 
         JPanel categoryPanel = createEntityPanel("Categorías",
@@ -149,49 +148,120 @@ public class LibrarySystemApp {
 
     private void deleteUserById(String id) {
         List<User> users = db.query(new Predicate<User>() {
-            @Override
-            public boolean match(User user) { return id.equals(user.getId()); }
+            @Override public boolean match(User user) { return id.equals(user.getId()); }
         });
 
-        if (!users.isEmpty()) {
-            int confirm = JOptionPane.showConfirmDialog(frame,
-                    "¿Está seguro de eliminar este usuario?\n" + users.getFirst(),
-                    "Confirmar Eliminación",
-                    JOptionPane.YES_NO_OPTION);
+        if (users.isEmpty()) {
+            JOptionPane.showMessageDialog(frame, "Usuario no encontrado", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
 
-            if (confirm == JOptionPane.YES_OPTION) {
-                db.delete(users.getFirst());
-                outputArea.append("Usuario eliminado: " + id + "\n");
+        User user = users.getFirst();
+        ObjectSet<Lending> activeLendings = db.query(new Predicate<Lending>() {
+            @Override public boolean match(Lending l) {
+                return l.getUser().equals(user) && l.getDevolutionDate() == null;
             }
-        } else {
-            JOptionPane.showMessageDialog(frame,
-                    "No se encontró un usuario con el ID: " + id,
-                    "Error", JOptionPane.ERROR_MESSAGE);
+        });
+
+        if (activeLendings.hasNext()) {
+            StringBuilder message = new StringBuilder();
+            message.append("No se puede eliminar el usuario porque tiene préstamos activos:\n");
+
+            while (activeLendings.hasNext()) {
+                Lending l = activeLendings.next();
+                message.append("- Título: ").append(l.getBook().getTitle()).append(" (desde ").append(l.getLendingDate()).append(")\n");
+            }
+            JOptionPane.showMessageDialog(frame, message.toString(), "Préstamos activos", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        int confirm = JOptionPane.showConfirmDialog(frame,
+                "¿Eliminar usuario " + user.getWholeName() + "?\n" +
+                        "Se eliminarán los registros de préstamos históricos asociados.",
+                "Confirmar eliminación", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+
+        if (confirm == JOptionPane.YES_OPTION) {
+            Lending lendingExample = new Lending();
+            lendingExample.setUser(user);
+            ObjectSet<Lending> allLendings = db.queryByExample(lendingExample);
+
+            while (allLendings.hasNext()) { db.delete(allLendings.next()); }
+            db.delete(user);
+            outputArea.setText("");
+            outputArea.append("Usuario y sus préstamos históricos eliminados: " + user + "\n");
         }
     }
 
     private void deleteBookByIsbn(String isbn) {
+        outputArea.setText("");
         List<Book> books = db.query(new Predicate<Book>() {
             @Override
-            public boolean match(Book book) {
-                return isbn.equals(book.getISBN());
-            }
+            public boolean match(Book book) { return isbn.equals(book.getISBN()); }
         });
 
-        if (!books.isEmpty()) {
-            int confirm = JOptionPane.showConfirmDialog(frame,
-                    "¿Está seguro de eliminar este libro?\n" + books.getFirst(),
-                    "Confirmar Eliminación",
-                    JOptionPane.YES_NO_OPTION);
-
-            if (confirm == JOptionPane.YES_OPTION) {
-                db.delete(books.getFirst());
-                outputArea.append("Libro eliminado: " + isbn + "\n");
-            }
-        } else {
+        if (books.isEmpty()) {
             JOptionPane.showMessageDialog(frame,
                     "No se encontró un libro con el ISBN: " + isbn,
                     "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        Book bookToDelete = books.getFirst();
+        Lending lendingExample = new Lending();
+        lendingExample.setBook(bookToDelete);
+        ObjectSet<Lending> bookLendings = db.queryByExample(lendingExample);
+
+        boolean hasActiveLendings = false;
+        StringBuilder activeLendingsInfo = new StringBuilder();
+
+        while (bookLendings.hasNext()) {
+            Lending lending = bookLendings.next();
+            if (lending.getDevolutionDate() == null) {
+                hasActiveLendings = true;
+                activeLendingsInfo.append("- Préstamo a ")
+                        .append(lending.getUser().getWholeName())
+                        .append(" (desde ")
+                        .append(lending.getLendingDate())
+                        .append(")\n");
+            }
+        }
+
+        if (hasActiveLendings) {
+            JOptionPane.showMessageDialog(frame,
+                    "No se puede eliminar el libro porque tiene préstamos activos:\n\n" +
+                            activeLendingsInfo.toString() + "\n",
+                    "Error al eliminar",
+                    JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        boolean hasHistoricalLendings = !bookLendings.isEmpty();
+        String confirmationMessage = "¿Está seguro de eliminar este libro?\n - Libro: " + bookToDelete.getTitle() + " - Autor: " + bookToDelete.getAuthor();
+
+        if (hasHistoricalLendings) {
+            confirmationMessage += "\n\nCuidado: Este libro tiene " + bookLendings.size() + " préstamos históricos que también serán eliminados";
+        }
+
+        int confirm = JOptionPane.showConfirmDialog(frame,
+                confirmationMessage,
+                "Confirmar Eliminación",
+                JOptionPane.YES_NO_OPTION,
+                hasHistoricalLendings ? JOptionPane.WARNING_MESSAGE : JOptionPane.QUESTION_MESSAGE);
+
+        if (confirm == JOptionPane.YES_OPTION) {
+            if (hasHistoricalLendings) {
+                bookLendings.reset();
+                int deletedLendings = 0;
+                while (bookLendings.hasNext()) {
+                    db.delete(bookLendings.next());
+                    deletedLendings++;
+                }
+                outputArea.setText("");
+                outputArea.append("Se eliminaron " + deletedLendings + " préstamos históricos asociados\n");
+            }
+
+            db.delete(bookToDelete);
+            outputArea.append("Libro eliminado: " + bookToDelete.getTitle() + " (ISBN: " + isbn + ")\n");
         }
     }
 
@@ -218,14 +288,13 @@ public class LibrarySystemApp {
             book = new Book("", "", "", "", 0, true, null);
         }
 
-        JPanel panel = new JPanel(new GridLayout(0, 2, 5, 5));
+        JPanel panel = new JPanel(new GridLayout(0, 2, 0, 5));
         JTextField isbnField = new JTextField(book.getISBN());
         JTextField titleField = new JTextField(book.getTitle());
         JTextField authorField = new JTextField(book.getAuthor());
         JTextField publisherField = new JTextField(book.getPublisher());
         JTextField yearField = new JTextField(book.getPublishedYear() > 0 ? String.valueOf(book.getPublishedYear()) : "");
-        JComboBox<Category> categoryCombo = new JComboBox<>(Category.values());
-        if (book.getCategory() != null) categoryCombo.setSelectedItem(book.getCategory());
+        JComboBox<Category> categoryCombo = getCategoryJComboBox(book);
         JCheckBox availableCheck = new JCheckBox("Disponible", book.isAvailable());
 
         if (action.equals("Actualizar")) isbnField.setEditable(false);
@@ -259,6 +328,7 @@ public class LibrarySystemApp {
                 book.setAvailable(availableCheck.isSelected());
 
                 db.store(book);
+                outputArea.setText("");
                 outputArea.append("Libro " + (action.equals("Agregar") ? "agregado" : "actualizado") + ": " + book + "\n");
             } catch (NumberFormatException e) {
                 JOptionPane.showMessageDialog(frame, "Año debe ser un número válido", "Error", JOptionPane.ERROR_MESSAGE);
@@ -284,6 +354,7 @@ public class LibrarySystemApp {
                 boolean newStatus = !book.isAvailable();
                 book.setAvailable(newStatus);
                 db.store(book);
+                outputArea.setText("");
                 outputArea.append("Libro " + isbn + " ahora está " +
                         (newStatus ? "disponible" : "no disponible") + "\n");
             } else {
@@ -325,7 +396,7 @@ public class LibrarySystemApp {
             });
 
             outputArea.setText("");
-            outputArea.append("=== RESULTADOS DE BÚSQUEDA POR " + criterio.toUpperCase() + " ===\n");
+            outputArea.append("--- Resultados de búsqueda por [" + criterio + "] ---\n");
             if (books.isEmpty()) {
                 outputArea.append("No se encontraron libros que coincidan\n");
             } else {
@@ -389,6 +460,7 @@ public class LibrarySystemApp {
             user.setTelephoneNumber(phoneField.getText());
 
             db.store(user);
+            outputArea.setText("");
             outputArea.append("Usuario " + (action.equals("Agregar") ? "agregado" : "actualizado") + ": " + user + "\n");
         }
     }
@@ -398,43 +470,36 @@ public class LibrarySystemApp {
     // ------- Métodos CRUD para Préstamos -------
     private void createNewLending() {
         List<User> users = db.query(User.class);
-        User selectedUser = (User) JOptionPane.showInputDialog(frame,
-                "Seleccione el usuario:",
-                "Nuevo Préstamo - Paso 1/2",
-                JOptionPane.QUESTION_MESSAGE,
-                null,
-                users.toArray(),
-                null);
+        JComboBox<User> userCombo = new JComboBox<>(users.toArray(new User[0]));
+        userCombo.setRenderer(new UserRenderer());
 
-        if (selectedUser == null) return;
+        if (JOptionPane.showConfirmDialog(frame, userCombo, "Seleccione el usuario:", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION) {
+            return;
+        }
+        User selectedUser = (User) userCombo.getSelectedItem();
 
         List<Book> availableBooks = db.query(new Predicate<Book>() {
-            @Override
-            public boolean match(Book book) {
-                return book.isAvailable();
-            }
+            @Override public boolean match(Book book) { return book.isAvailable(); }
         });
 
-        Book selectedBook = (Book) JOptionPane.showInputDialog(frame,
-                "Seleccione el libro a prestar:",
-                "Nuevo Préstamo - Paso 2/2",
-                JOptionPane.QUESTION_MESSAGE,
-                null,
-                availableBooks.toArray(),
-                null);
+        JComboBox<Book> bookCombo = new JComboBox<>(availableBooks.toArray(new Book[0]));
+        bookCombo.setRenderer(new BookRenderer());
 
-        if (selectedBook != null) {
-            Lending lending = new Lending();
-            lending.setUser(selectedUser);
-            lending.setBook(selectedBook);
-            lending.setLendingDate(new Date());
-
-            selectedBook.setAvailable(false);
-            db.store(selectedBook);
-
-            db.store(lending);
-            outputArea.append("Nuevo préstamo registrado:\n" + lending + "\n");
+        if (JOptionPane.showConfirmDialog(frame, bookCombo, "Seleccione el libro a prestar:", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION) {
+            return;
         }
+        Book selectedBook = (Book) bookCombo.getSelectedItem();
+        Lending lending = new Lending();
+        lending.setUser(selectedUser);
+        lending.setBook(selectedBook);
+        lending.setLendingDate(new Date());
+
+        selectedBook.setAvailable(false);
+        db.store(selectedBook);
+        db.store(lending);
+
+        outputArea.setText("");
+        outputArea.append("Nuevo préstamo registrado:\n" + lending + "\n");
     }
 
     private void registerDevolution() {
@@ -469,6 +534,7 @@ public class LibrarySystemApp {
             db.store(book);
 
             db.store(selectedLending);
+            outputArea.setText("");
             outputArea.append("Devolución registrada:\n" + selectedLending + "\n");
         }
     }
@@ -552,6 +618,7 @@ public class LibrarySystemApp {
                     }
 
                     db.store(selectedLending);
+                    outputArea.setText("");
                     outputArea.append("Préstamo actualizado:\n" + selectedLending + "\n");
                 } catch (Exception e) {
                     JOptionPane.showMessageDialog(frame,
@@ -596,6 +663,7 @@ public class LibrarySystemApp {
                 }
 
                 db.delete(selectedLending);
+                outputArea.setText("");
                 outputArea.append("Préstamo eliminado:\n" + selectedLending + "\n");
             }
         }
@@ -609,7 +677,7 @@ public class LibrarySystemApp {
                 .filter(l -> l.getDevolutionDate() == null)
                 .count();
 
-        outputArea.append("=== HISTORIAL DE PRÉSTAMOS ===\n");
+        outputArea.append("--- Historial de Préstamos ---\n");
         outputArea.append("Total: " + allLendings.size() + " préstamos\n");
         outputArea.append("Activos: " + activeCount + "\n");
         outputArea.append("Devueltos: " + (allLendings.size() - activeCount) + "\n\n");
@@ -658,8 +726,7 @@ public class LibrarySystemApp {
             }
 
             db.store(newCategory);
-            outputArea.append("Categoría creada: " + newCategory.getName() +
-                    (newCategory.getDescription().isEmpty() ? "" : "\nDescripción: " + newCategory.getDescription()) + "\n");
+            outputArea.append("Categoría creada: " + newCategory.toString());
         }
     }
 
@@ -720,8 +787,8 @@ public class LibrarySystemApp {
                 selectedCategory.setName(newName);
                 selectedCategory.setDescription(newDescription);
                 db.store(selectedCategory);
-                outputArea.append("Categoría actualizada: " + selectedCategory.getName() +
-                        (selectedCategory.getDescription().isEmpty() ? "" : "\nNueva descripción: " + selectedCategory.getDescription()) + "\n");
+                outputArea.setText("");
+                outputArea.append("Categoría actualizada: " + selectedCategory.toString());
             }
         }
     }
@@ -768,7 +835,8 @@ public class LibrarySystemApp {
 
             if (confirm == JOptionPane.YES_OPTION) {
                 db.delete(selectedCategory);
-                outputArea.append("Categoría eliminada: " + selectedCategory + "\n");
+                outputArea.setText("");
+                outputArea.append("Categoría eliminada: " + selectedCategory.getName());
             }
         }
     }
@@ -801,7 +869,7 @@ public class LibrarySystemApp {
             });
 
             outputArea.setText("");
-            outputArea.append("=== LIBROS EN CATEGORÍA: " + selectedCategory + " ===\n");
+            outputArea.append("--- Libros en categoría: " + selectedCategory.getName() + " ---\n");
             outputArea.append("Total: " + books.size() + " libros\n\n");
 
             if (books.isEmpty()) {
@@ -812,9 +880,42 @@ public class LibrarySystemApp {
         }
     }
 
-    private void exitApplication() {
-        db.close();
-        frame.dispose();
-        System.exit(0);
+    private JComboBox<Category> getCategoryJComboBox(Book book) {
+        JComboBox<Category> categoryCombo = new JComboBox<>(Category.values());
+        categoryCombo.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                if (value instanceof Category) { setText(((Category) value).getName()); }
+                return this;
+            }
+        });
+        if (book != null && book.getCategory() != null) { categoryCombo.setSelectedItem(book.getCategory()); }
+        if (book.getCategory() != null) categoryCombo.setSelectedItem(book.getCategory());
+        return categoryCombo;
+    }
+
+    private static class UserRenderer extends DefaultListCellRenderer {
+        @Override
+        public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+            super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+            if (value instanceof User) {
+                User user = (User) value;
+                setText("Usuario: " + user.getWholeName() + " (" + user.getEmail() + ")");
+            }
+            return this;
+        }
+    }
+
+    private static class BookRenderer extends DefaultListCellRenderer {
+        @Override
+        public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+            super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+            if (value instanceof Book) {
+                Book book = (Book) value;
+                setText("Título: " + book.getTitle() + " - Autor: " + book.getAuthor());
+            }
+            return this;
+        }
     }
 }
