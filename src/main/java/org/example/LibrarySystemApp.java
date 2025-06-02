@@ -414,7 +414,7 @@ public class LibrarySystemApp {
             }
             user = users.getFirst();
         } else {
-            user = new User("", "");
+            user = new User("", "", "", "");
         }
 
         JPanel panel = new JPanel(new GridLayout(0, 2, 5, 5));

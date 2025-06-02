@@ -5,19 +5,8 @@ public class User {
     private String wholeName;
     private String email;
     private String telephoneNumber;
+
     public User() {}
-
-    public User(String id, String wholeName) {
-        this.id = id;
-        this.wholeName = wholeName;
-    }
-
-    public User(String id, String wholeName, String email) {
-        this.id = id;
-        this.wholeName = wholeName;
-        this.email = email;
-    }
-
     public User(String id, String wholeName, String email, String telephoneNumber) {
         this.id = id;
         this.wholeName = wholeName;
